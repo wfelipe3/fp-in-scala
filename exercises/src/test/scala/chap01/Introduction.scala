@@ -69,6 +69,9 @@ class Introduction extends FreeSpec with Matchers {
         val (coffees, charges) = purchase.unzip
         (coffees, charges.reduce((c1, c2) => c1.combine(c2).right.get))
       }
+
+      def coalesce(charges: List[Charge]): List[Charge] =
+        charges.groupBy(_.cc).values.map(_.reduce((c1, c2) => c1.combine(c2).right.get)).toList
     }
   }
 }
