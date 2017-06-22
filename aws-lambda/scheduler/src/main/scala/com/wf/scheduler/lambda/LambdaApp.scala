@@ -4,11 +4,12 @@ import java.io.{InputStream, StringWriter}
 
 import com.wf.scheduler.config.Configs
 import com.wf.scheduler.notification.MailNotification
-import com.wf.scheduler.notification.MailNotification._
+import com.wf.scheduler.storage.EmailDynamoStorage
+import com.wf.scheduler.storage.EmailDynamoStorage.EmailTemplate
 import org.apache.commons.io.IOUtils
 
-import scalaz.Scalaz._
-import scalaz._
+import scala.collection.JavaConverters._
+import scala.util.Try
 
 /**
   * Created by feliperojas on 5/7/17.
@@ -16,20 +17,26 @@ import scalaz._
 class LambdaApp {
 
   def handle(in: InputStream) = {
+    val env = Map[String, String](System.getenv.asScala.toList: _*)
 
-    val env = Configs.getEnvConfig
+    val configs = for {
+      notiConfig <- Configs.notificationConfig(env)
+      dynamoConfig <- Configs.dynamoConfig(env)
+    } yield (notiConfig, dynamoConfig)
 
-    MailNotification.sendEmail(
-      emailAuth = Auth(User(env.user), Password(env.password)),
-      email = Email(
-        from = Account(env.from, "Felipe Rojas"),
-        to = Account(env.to, "william f"),
-        subject = "test",
-        message = """<html><h1>test message</h1></html>"""
-      )
-    ).recover {
-      case e: Exception => e.printStackTrace()
-    }
+    configs
+      .map { c =>
+        val (notiConfig, dynamoConfig) = c
+        for {
+          templates <- EmailDynamoStorage.getActiveTemplates(dynamoConfig)
+          head <- templates.headOption.fold[Try[EmailTemplate]](util.Failure(new Exception("No more templates")))(util.Success(_))
+          email <- MailNotification.sendEmail(notiConfig, head)
+          _ <- EmailDynamoStorage.markTemplateAsInactive(dynamoConfig, email)
+        } yield ()
+      }
+      .getOrElse(util.Failure(new Exception("no config found")))
+      .get
+
   }
 
   def toString(in: InputStream): String = {

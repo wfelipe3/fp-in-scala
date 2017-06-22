@@ -1,6 +1,6 @@
 package com.wf.scheduler.notification
 
-import com.wf.scheduler.notification.Notification.{Notifier, NotifierConfig}
+import com.wf.scheduler.storage.EmailDynamoStorage.EmailTemplate
 import org.apache.commons.mail.{DefaultAuthenticator, HtmlEmail}
 
 import scala.collection.JavaConverters._
@@ -13,27 +13,18 @@ object MailNotification {
 
   case class MailConfig(host: String, port: Int, user: String, password: String)
 
-  case class MailNoti(from: String, to: String, subject: String, message: String)
-
-  implicit val mailNotifier = new Notifier[MailConfig, MailNoti] {
-    override def notify(a: MailConfig, b: MailNoti): Try[MailNoti] = {
-      Try {
-        val smtp = getSmtp(a.user, a.password, a.host, a.port)
-        smtp.setFrom(b.from)
-        smtp.setSubject(b.subject)
-        smtp.setHtmlMsg(b.message)
-        smtp.addTo(b.to)
-        smtp.send()
-        MailNoti
-      }
+  def sendEmail(a: MailConfig, b: EmailTemplate): Try[EmailTemplate] = {
+    Try {
+      val smtp = getSmtp(a.user, a.password, a.host, a.port)
+      smtp.setFrom(b.from)
+      smtp.setSubject(b.subject)
+      smtp.setHtmlMsg(b.template)
+      smtp.addTo(b.to)
+      smtp.send()
+      b
     }
   }
 
-  implicit val mailConfig = new NotifierConfig[MailConfig] {
-    override def getConfig(): Option[MailConfig] = {
-
-    }
-  }
 
   private def getSmtp(user: String, pass: String, host: String, port: Int) = {
     val gmail = new HtmlEmail
